@@ -95,6 +95,7 @@ class Inverter():
     result = b""
     r = self.request(target, "/solar_api/v1/GetPowerFlowRealtimeData.fcgi")
     r = json.loads(r.text)['Body']['Data']['Site']
+    r = {k: v or 0 for (k, v) in r.items()}
     metric = "P_PV_0"
     labels["system"] = "controller"
     metrics[metric] = Metric(metric, "Fronius site controller power output", "untyped")
@@ -108,6 +109,7 @@ class Inverter():
         try:
           sub_r = self.request(s, "/solar_api/v1/GetPowerFlowRealtimeData.fcgi")
           sub_r = json.loads(sub_r.text)['Body']['Data']['Site']
+          sub_r = {k: v or 0 for (k, v) in sub_r.items()}
           metric = f"P_PV_{i}"
           metrics[metric] = Metric(metric, f"Fronius subsytem {i} power output", "untyped")
           metrics[metric].add_sample(metric, value=sub_r["P_PV"], labels={'system': f'subsystem-{i}'})
