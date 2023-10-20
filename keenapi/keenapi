@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""
+
+[Router]
+username = user
+password = secret
+
+"""
+
+import configparser
+import hashlib
+import os
+import requests
+import sys
+
+#CONFIG_FILE_NAME = "keenetic.conf"
+CONFIGFILE = os.path.join(os.path.expanduser("~"), ".local", "etc", "keenetic.conf")
+
+cookies_current = None
+session = requests.session()                            # заводим сессию глобально чтобы отрабатывались куки
+
+def keen_auth(login, passw):                            # авторизация на роутере
+    response = keen_request(target, "auth")
+
+    if response.status_code == 401:
+        md5 = login + ":" + response.headers["X-NDM-Realm"] + ":" + passw
+        md5 = hashlib.md5(md5.encode('utf-8'))
+        sha = response.headers["X-NDM-Challenge"] + md5.hexdigest()
+        sha = hashlib.sha256(sha.encode('utf-8'))
+        response = keen_request(target, "auth", {"login": login, "password": sha.hexdigest()})
+        if response.status_code == 200:
+            return True
+    elif response.status_code == 200:
+        return True
+    else:
+        return False
+
+
+def keen_request(target, query, post = None):          # отправка запросов на роутер
+
+    global session
+
+# конструируем url
+    url = "http://" + target + "/" + query
+
+# если есть данные для запроса POST, делаем POST, иначе GET
+    if post:
+        return session.post(url, json=post)
+    else:
+        return session.get(url)
+
+
+config = configparser.ConfigParser()  # создаём объекта парсера
+config.read(CONFIGFILE)
+target = sys.argv[1]
+login = config["Router"]["username"]
+passw = config["Router"]["password"]
+#endpoint = input('Keenetic API endpoint: ')
+endpoint = sys.argv[2]
+
+# тестируем
+if keen_auth(login, passw):
+  #response = keen_request(ip_addr, 'rci/show/version') #/interface/WifiMaster0')
+  #response = keen_request(ip_addr, 'rci/show/interface') #/interface/WifiMaster0')
+  #response = keen_request(ip_addr, 'rci/show/ip/nat') #/interface/WifiMaster0')
+  #print(response.text)
+  response = keen_request(target, endpoint)
+  print(response.text)
+  #input("Press ENTER to continue ...")
+
