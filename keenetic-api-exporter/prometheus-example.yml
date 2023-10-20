@@ -17,4 +17,3 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: localhost:9117  # The keenetic exporter's real hostname:port.
-
