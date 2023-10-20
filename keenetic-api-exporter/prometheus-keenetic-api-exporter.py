@@ -212,6 +212,7 @@ class Handler(BaseHTTPRequestHandler):
       </html>
     """
 
+    if url.path == '/favicon.ico': return
     target = url.getquerydict().get('target')[0]
     if target is None:
       self.send_error(404, message="No target!", explain="No target specified in query ...")
