@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 
 Dependencies:
@@ -19,15 +20,30 @@ endpoints:
 
 """
 
+# Standard imports
 import os
+import time
+import traceback
+from string import Template
 import sys
+import syslog
+
+# Additional imports
+import argparse
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import prometheus_client as prom
+from prometheus_client import Metric, CollectorRegistry, generate_latest
+import requests
+from uritools import urisplit
+import yaml
+from yaml.loader import SafeLoader
 
 PROGRAMNAME = os.path.basename(sys.argv[0])
 CONFIGFILE = os.path.splitext(PROGRAMNAME)[0] + ".conf"
 LISTEN = ":8000"
 
-import argparse
-formatter = lambda prog: argparse.HelpFormatter(prog, max_help_position=27)
+# Module argparse
+def formatter(prog): return argparse.HelpFormatter(prog, max_help_position=60)
 cli = argparse.ArgumentParser(
   prog = PROGRAMNAME,
   description = "Prometheus exporter for metrics of Keenetic home routers based on the Keenetic API.",
@@ -39,29 +55,17 @@ cli.add_argument('-l', '--listen', action='store', default=LISTEN, help="server 
 cli.add_argument('--self-metrics', action=argparse.BooleanOptionalAction, help="enable process metrics")
 args = cli.parse_args()
 
-import hashlib
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import prometheus_client as prom
-from prometheus_client import Metric, CollectorRegistry, generate_latest, Gauge, Counter, REGISTRY
-import requests
-from string import Template
-
-import syslog
+# Module syslog
 syslog.openlog(logoption=syslog.LOG_PID)
 def log(message): syslog.syslog(syslog.LOG_INFO,message)
 
-import time
+# Module time
 def now(): return int(time.time())
-
-import traceback
-from uritools import urisplit
-import yaml
-from yaml.loader import SafeLoader
 
 class Config():
 
   def __init__(self, configfile):
-    with open(configfile) as f:
+    with open(configfile, encoding="utf-8") as f:
       config = yaml.load(f, Loader=SafeLoader)
     self.__dict__ = config
 
@@ -76,7 +80,6 @@ class Handler(BaseHTTPRequestHandler):
 
   def do_GET(self):
     url = urisplit(self.path)
-    params = url.getquerydict()
 
     self.error_message_format = """
       <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
@@ -97,15 +100,17 @@ class Handler(BaseHTTPRequestHandler):
 
     try:
       target = url.getquerydict().get('target')[0]
-    except:
+    except KeyError:
       trace = traceback.format_exc().strip()
       self.send_error(404, message=trace, explain="No target specified in query ...")
       return
 
-    if (now() - data["timestamp"]) > 3600 or data.get("first_seen") is None: 
+    if (now() - data["timestamp"]) > 3600 or data.get("first_seen") is None:
+      # Config is dynamically loaded from config file
+      # pylint: disable=no-member
       url = Template(self.config.target[target]["url"]).substitute(token=self.config.target[target]["token"])
       log(f"Cached public IP address data expired - updating from {url}")
-      r = requests.get(url)
+      r = requests.get(url, timeout=30)
       if r.status_code != 200:
         self.send_error(503, message=f"Backend API returned {r.status_code}", explain="Backend query failed.")
       data["ipinfo"] = r.json()
@@ -140,4 +145,3 @@ if __name__ == '__main__':
   log(f"Starting {PROGRAMNAME} on {address}:{port} ...")
   server = HTTPServer((address, int(port)), Handler)
   server.serve_forever()
-
