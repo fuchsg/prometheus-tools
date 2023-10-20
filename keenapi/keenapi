@@ -67,4 +67,3 @@ if keen_auth(login, passw):
   response = keen_request(target, endpoint)
   print(response.text)
   #input("Press ENTER to continue ...")
-
