@@ -1,0 +1,11 @@
+[Unit]
+Description=prometheus-fronius-exporter
+After=multi-user.target
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=/usr/local/bin/prometheus-fronius-exporter --listen ':9116' --config-file='/etc/prometheus/prometheus-fronius-exporter.conf'
+
+[Install]
+WantedBy=multi-user.target
