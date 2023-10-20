@@ -41,7 +41,7 @@ PROGRAMNAME = os.path.basename(sys.argv[0])
 CONFIGFILE = os.path.splitext(PROGRAMNAME)[0] + '.conf'
 LISTEN = ':8000'
 
-formatter = lambda prog: argparse.HelpFormatter(prog, max_help_position=45)
+def formatter(prog): return argparse.HelpFormatter(prog, max_help_position=60)
 cli = argparse.ArgumentParser(
   prog = PROGRAMNAME,
   description = __doc__,
@@ -67,7 +67,7 @@ class Keenetic():
   """ Keenetic API client class """
 
   def __init__(self, configfile):
-    with open(configfile) as f:
+    with open(configfile, encoding='utf-8') as f:
       self.config = yaml.load(f, Loader=SafeLoader)
 
     self.session = requests.session()
@@ -190,7 +190,7 @@ class Handler(BaseHTTPRequestHandler):
 
   keenetic = Keenetic(args.config)
 
-  # pylint: disable=C0103; Method provided by upstream class
+  # pylint: disable=invalid-name; Method provided by upstream class
   def do_GET(self):
     """ Provide data in Prometheus Exposition Format upon client request """
     url = urisplit(self.path)
