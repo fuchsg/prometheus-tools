@@ -185,6 +185,36 @@ class Keenetic():
 
     return result
 
+  def hotspot(self, target):
+    """
+      Returning hotspot summary metrics for all connected clients
+      API endpoint: rci/show/ip/hotspot/summary?attribute=<metric>
+    """
+    result = b""
+    metrics = {}
+
+    for metric in self.config["modules"]["hotspot"]["metrics"]:
+      if self.auth(target):
+        clients = self.request(target, f"rci/show/ip/hotspot/summary?attribute={metric}")
+        clients = clients.json()['host']
+
+        for client in clients:
+          labels = {}
+          for label in self.config["modules"]["hotspot"]["labels"]:
+            # Skip label if it does not exist
+            try:
+              labels[label] = client[label]
+            except KeyError:
+              continue
+
+          metrics[metric] = Metric(metric, f"Keenetic hotspot summary metric {metric}", "untyped")
+          metrics[metric].add_sample(metric, value=client[metric], labels=labels)
+
+          registry = self.register(metrics)
+          result = b"".join([result, generate_latest(registry)])
+
+    return result
+
 class Handler(BaseHTTPRequestHandler):
   """ HTTP server request handler class """
 
