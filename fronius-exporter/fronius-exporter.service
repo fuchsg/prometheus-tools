@@ -3,9 +3,11 @@ Description=prometheus-fronius-exporter
 After=multi-user.target
 
 [Service]
+Environment=PROGRAMNAME=prometheus-fronius-exporter
 Type=simple
 Restart=always
-ExecStart=/usr/local/bin/prometheus-fronius-exporter --listen ':9116' --config-file='/etc/prometheus/prometheus-fronius-exporter.conf'
+SyslogIdentifier=prometheus-fronius-exporter
+ExecStart=bash -c "exec -a ${PROGRAMNAME} python3 /usr/local/bin/prometheus-fronius-exporter --listen ':9116' --config='/etc/prometheus/fronius-exporter.conf'"
 
 [Install]
 WantedBy=multi-user.target
