@@ -14,13 +14,14 @@ the open Fronius API interface
 import os
 import sys
 import traceback
+import logging
+import logging.handlers
+import json
 
 import argparse
 from argparse import BooleanOptionalAction
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import logging
-import logging.handlers
-import json
+from icecream import ic
 import prometheus_client as prom
 from prometheus_client import Metric, CollectorRegistry, generate_latest
 import requests
@@ -88,24 +89,51 @@ class Inverter():
       Combining results across multiple inverters has to be done in Grafana
       API endpoint: /solar_api/v1/GetPowerFlowRealtimeData.fcgi
     """
+    metrics = {}
+    labels = {}
+
     result = b""
     r = self.request(target, "/solar_api/v1/GetPowerFlowRealtimeData.fcgi")
     r = json.loads(r.text)['Body']['Data']['Site']
+    metric = "P_PV_0"
+    labels["system"] = "controller"
+    metrics[metric] = Metric(metric, "Fronius site controller power output", "untyped")
+    metrics[metric].add_sample(metric, value=r["P_PV"], labels={'system': 'controller'})
 
-    #labels = {}
-    #for label in self.config["modules"]["system"]["labels"]:
-    #  labels[label] = r[label]
+    if self.config.targets[target]:
+      subsystems = self.config.targets[target]
+      i = 0
+      for s in subsystems:
+        i = i + 1
+        try:
+          sub_r = self.request(s, "/solar_api/v1/GetPowerFlowRealtimeData.fcgi")
+          sub_r = json.loads(sub_r.text)['Body']['Data']['Site']
+          metric = f"P_PV_{i}"
+          metrics[metric] = Metric(metric, f"Fronius subsytem {i} power output", "untyped")
+          metrics[metric].add_sample(metric, value=sub_r["P_PV"], labels={'system': f'subsystem-{i}'})
+          r["P_PV"] += sub_r["P_PV"]
+        except requests.exceptions.RequestException as e:
+          ic.configureOutput(prefix="EXCEPTION| ")
+          ic(e)
+          print(f"Subsystem {s} is offline ...")
+          ic.configureOutput(prefix="")
+          labels["error"] = "requestError"
 
-    metrics = {}
-    #for metric in self.config["modules"]["system"]["metrics"]:
-    #  metrics[metric] = Metric(metric, f"Keenetic system metric {metric}", "untyped")
-    #  metrics[metric].add_sample(metric, value=r[metric], labels=labels)
-    #for metric in [ 'P_Akku', 'P_Grid', 'P_Load', 'P_PV', 'rel_Autonomy' ]:
-    print(self.config.modules['GetPowerFlowRealtimeData'])
     for metric in self.config.modules['GetPowerFlowRealtimeData']['metrics']:
       metrics[metric] = Metric(metric, f"Fronius inverter site metric {metric}", "untyped")
       if not r[metric]: r[metric] = 0
       metrics[metric].add_sample(metric, value=r[metric], labels="")
+
+    for metric in ("P_fromGrid", "P_toGrid", "P_Usage"):
+      metrics[metric] = Metric(metric, f"Calculated site metric {metric}", "untyped")
+    if r["P_Grid"] < 0:
+      metrics["P_fromGrid"].add_sample("P_fromGrid", value=0, labels="")
+      metrics["P_toGrid"].add_sample("P_toGrid", value=r["P_Grid"] * -1, labels="")
+      metrics["P_Usage"].add_sample("P_Usage", value=r["P_PV"] + r["P_Grid"], labels="")
+    else:
+      metrics["P_fromGrid"].add_sample("P_fromGrid", value=r["P_Grid"], labels="")
+      metrics["P_toGrid"].add_sample("P_toGrid", value=0, labels="")
+      metrics["P_Usage"].add_sample("P_Usage", value=r["P_PV"] + r["P_Grid"], labels="")
 
     registry = self.register(metrics)
     result = generate_latest(registry)
@@ -126,8 +154,6 @@ class Config():
 
     with f:
       config = yaml.load(f, Loader=SafeLoader)
-      #jobconfig = next(job for job in promconfig if job['job_name'] == 'fronius')['static_configs']
-      #config['targets'] = next(targets for targets in jobconfig if 'targets' in targets)['targets']
       self._config = config
 
 

@@ -6,8 +6,7 @@ scrape_configs:
       module: [GetPowerFlowRealtimeData]
     static_configs:
       - targets:
-        - 192.168.111.209
-        - 192.168.111.219
+        - 192.168.1.209
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
